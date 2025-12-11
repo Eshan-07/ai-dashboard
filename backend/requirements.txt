@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+pandas
+python-multipart
+aiofiles
+sqlalchemy
+pymysql
+python-jose
+passlib[argon2]
+argon2-cffi
+python-dotenv
+openpyxl
+google-auth
+requests

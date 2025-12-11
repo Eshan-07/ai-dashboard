@@ -1,0 +1,146 @@
+{
+  "dataset": "housing_index",
+  "csv_basename": "fe4382fa1f0348bf9ccfe2618f8243b4__housing.csv",
+  "summary_text": "median_income: count=20640, mean=3.871, median=3.535, min=0.500, max=15.000",
+  "sample_rows": [
+    {
+      "longitude": -122.23,
+      "latitude": 37.88,
+      "housing_median_age": 41.0,
+      "total_rooms": 880.0,
+      "total_bedrooms": 129.0,
+      "population": 322.0,
+      "households": 126.0,
+      "median_income": 8.3252,
+      "median_house_value": 452600.0,
+      "ocean_proximity": "NEAR BAY"
+    },
+    {
+      "longitude": -122.22,
+      "latitude": 37.86,
+      "housing_median_age": 21.0,
+      "total_rooms": 7099.0,
+      "total_bedrooms": 1106.0,
+      "population": 2401.0,
+      "households": 1138.0,
+      "median_income": 8.3014,
+      "median_house_value": 358500.0,
+      "ocean_proximity": "NEAR BAY"
+    },
+    {
+      "longitude": -122.24,
+      "latitude": 37.85,
+      "housing_median_age": 52.0,
+      "total_rooms": 1467.0,
+      "total_bedrooms": 190.0,
+      "population": 496.0,
+      "households": 177.0,
+      "median_income": 7.2574,
+      "median_house_value": 352100.0,
+      "ocean_proximity": "NEAR BAY"
+    },
+    {
+      "longitude": -122.25,
+      "latitude": 37.85,
+      "housing_median_age": 52.0,
+      "total_rooms": 1274.0,
+      "total_bedrooms": 235.0,
+      "population": 558.0,
+      "households": 219.0,
+      "median_income": 5.6431,
+      "median_house_value": 341300.0,
+      "ocean_proximity": "NEAR BAY"
+    },
+    {
+      "longitude": -122.25,
+      "latitude": 37.85,
+      "housing_median_age": 52.0,
+      "total_rooms": 1627.0,
+      "total_bedrooms": 280.0,
+      "population": 565.0,
+      "households": 259.0,
+      "median_income": 3.8462,
+      "median_house_value": 342200.0,
+      "ocean_proximity": "NEAR BAY"
+    },
+    {
+      "longitude": -122.25,
+      "latitude": 37.85,
+      "housing_median_age": 52.0,
+      "total_rooms": 919.0,
+      "total_bedrooms": 213.0,
+      "population": 413.0,
+      "households": 193.0,
+      "median_income": 4.0368,
+      "median_house_value": 269700.0,
+      "ocean_proximity": "NEAR BAY"
+    }
+  ],
+  "sample_rows_text": "longitude:-122.23, latitude:37.88, housing_median_age:41.0, total_rooms:880.0, total_bedrooms:129.0, population:322.0, households:126.0, median_income:8.3252, median_house_value:452600.0, ocean_proximity:NEAR BAY\nlongitude:-122.22, latitude:37.86, housing_median_age:21.0, total_rooms:7099.0, total_bedrooms:1106.0, population:2401.0, households:1138.0, median_income:8.3014, median_house_value:358500.0, ocean_proximity:NEAR BAY\nlongitude:-122.24, latitude:37.85, housing_median_age:52.0, total_rooms:1467.0, total_bedrooms:190.0, population:496.0, households:177.0, median_income:7.2574, median_house_value:352100.0, ocean_proximity:NEAR BAY\nlongitude:-122.25, latitude:37.85, housing_median_age:52.0, total_rooms:1274.0, total_bedrooms:235.0, population:558.0, households:219.0, median_income:5.6431, median_house_value:341300.0, ocean_proximity:NEAR BAY\nlongitude:-122.25, latitude:37.85, housing_median_age:52.0, total_rooms:1627.0, total_bedrooms:280.0, population:565.0, households:259.0, median_income:3.8462, median_house_value:342200.0, ocean_proximity:NEAR BAY\nlongitude:-122.25, latitude:37.85, housing_median_age:52.0, total_rooms:919.0, total_bedrooms:213.0, population:413.0, households:193.0, median_income:4.0368, median_house_value:269700.0, ocean_proximity:NEAR BAY",
+  "computed_at": 1763454415,
+  "stats": {
+    "longitude": {
+      "count": 20640,
+      "mean": -119.56970445736432,
+      "median": -118.49,
+      "min": -124.35,
+      "max": -114.31
+    },
+    "latitude": {
+      "count": 20640,
+      "mean": 35.63186143410852,
+      "median": 34.26,
+      "min": 32.54,
+      "max": 41.95
+    },
+    "housing_median_age": {
+      "count": 20640,
+      "mean": 28.639486434108527,
+      "median": 29.0,
+      "min": 1.0,
+      "max": 52.0
+    },
+    "total_rooms": {
+      "count": 20640,
+      "mean": 2635.7630813953488,
+      "median": 2127.0,
+      "min": 2.0,
+      "max": 39320.0
+    },
+    "total_bedrooms": {
+      "count": 20433,
+      "mean": 537.8705525375618,
+      "median": 435.0,
+      "min": 1.0,
+      "max": 6445.0
+    },
+    "population": {
+      "count": 20640,
+      "mean": 1425.4767441860465,
+      "median": 1166.0,
+      "min": 3.0,
+      "max": 35682.0
+    },
+    "households": {
+      "count": 20640,
+      "mean": 499.5396802325581,
+      "median": 409.0,
+      "min": 1.0,
+      "max": 6082.0
+    },
+    "median_income": {
+      "count": 20640,
+      "mean": 3.8706710029069766,
+      "median": 3.5347999999999997,
+      "min": 0.4999,
+      "max": 15.0001
+    },
+    "median_house_value": {
+      "count": 20640,
+      "mean": 206855.81690891474,
+      "median": 179700.0,
+      "min": 14999.0,
+      "max": 500001.0
+    }
+  }
+}
