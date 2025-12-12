@@ -12,3 +12,18 @@ python-dotenv
 openpyxl
 google-auth
 requests
+
+# HTTP client used by chatbot / external calls
+httpx
+
+# MongoDB async driver used by utils.mongo
+motor
+
+# PyTorch (CPU) - pinned for reproducibility
+torch==2.2.0
+
+# FAISS (CPU) - used by transformer/embedding routes
+faiss-cpu
+
+# Add transformers only if you use HuggingFace models in code
+transformers
