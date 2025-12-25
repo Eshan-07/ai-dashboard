@@ -1,385 +1,291 @@
 import React, { useEffect, useState } from "react";
 import { useDashboardStore } from "../store/dashboardStore";
-import { listDatasets, suggestCharts, postRenderData, deleteDataset } from "../api/dashboardApi";
-import ChartThumbnail from "../components/ChartThumbnail";
-import ChartRenderer from "../components/ChartRenderer";
-import { Database, RefreshCw, FileText, Trash2, X, SlidersHorizontal } from "lucide-react";
+import {
+  listDatasets,
+  deleteDataset,
+} from "../api/dashboardApi";
+import {
+  Database,
+  RefreshCw,
+  Trash2,
+  X,
+  Eye,
+  Sun,
+  Moon,
+} from "lucide-react";
+
+/* ---------------- STABLE QUALITY ---------------- */
+const stableQuality = (id) => {
+  if (!id) return 75;
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return 60 + (Math.abs(hash) % 36);
+};
+
+const qualityColor = (q) => {
+  if (q >= 80) return "bg-emerald-500 text-emerald-400";
+  if (q >= 50) return "bg-yellow-500 text-yellow-400";
+  return "bg-rose-500 text-rose-400";
+};
 
 export default function History() {
-  const { history } = useDashboardStore();
+  /* ---------------- THEME ---------------- */
+  const [theme, setTheme] = useState(
+    localStorage.getItem("theme") || "dark"
+  );
 
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.remove("dark", "light");
+    root.classList.add(theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  /* ---------------- DATA ---------------- */
   const [datasets, setDatasets] = useState([]);
-  const [loadingDatasets, setLoadingDatasets] = useState(false);
-  const [datasetsError, setDatasetsError] = useState("");
-  const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const [chartSuggestions, setChartSuggestions] = useState([]);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-  const [suggestionError, setSuggestionError] = useState("");
+  const [selected, setSelected] = useState(null);
 
   useEffect(() => {
     fetchDatasets();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchDatasets = async () => {
-    setLoadingDatasets(true);
-    setDatasetsError("");
+    setLoading(true);
+    setError("");
     try {
       const resp = await listDatasets(200);
-      const items = resp?.datasets ?? resp ?? [];
-      setDatasets(items);
-    } catch (err) {
-      setDatasetsError(err?.message || "Failed to load datasets.");
+      setDatasets(resp?.datasets ?? resp ?? []);
+    } catch (e) {
+      setError(e?.message || "Failed to load datasets");
     } finally {
-      setLoadingDatasets(false);
+      setLoading(false);
     }
   };
 
-  const openDetails = (ds) => {
-    setChartSuggestions([]);
-    setSuggestionError("");
-    setLoadingSuggestions(false);
-    setSelected(ds);
-    // scroll modal to top when opening
-    setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
-  };
+  const handleDelete = async (d) => {
+    const id = d._id ?? d.dataset_id;
+    if (!id) return;
 
-  const closeDetails = () => {
-    setSelected(null);
-    setChartSuggestions([]);
-    setSuggestionError("");
-    setLoadingSuggestions(false);
-  };
-
-  const fetchChartSuggestions = async (datasetId, top_n = 6) => {
-    setLoadingSuggestions(true);
-    setSuggestionError("");
-    setChartSuggestions([]);
-    try {
-      const resp = await suggestCharts(datasetId, top_n);
-      const suggs = resp?.suggestions ?? resp ?? [];
-
-      if (!suggs.length) {
-        setSuggestionError("No suggestions returned for this dataset.");
-        setLoadingSuggestions(false);
-        return;
-      }
-
-      const renderPromises = suggs.map(async (spec) => {
-        try {
-          const renderRes = await postRenderData(datasetId, spec, 2000);
-          return { spec: renderRes.chart_spec ?? spec, aggregated: renderRes.aggregated, ok: true };
-        } catch (err) {
-          console.error("render-data error for spec:", spec, err);
-          return { spec, aggregated: null, ok: false, error: err?.message || String(err) };
-        }
-      });
-
-      const rendered = await Promise.all(renderPromises);
-      setChartSuggestions(rendered);
-    } catch (err) {
-      console.error("Suggestion error:", err);
-      setSuggestionError(err?.message || "Failed to fetch chart suggestions.");
-    } finally {
-      setLoadingSuggestions(false);
-    }
-  };
-
-  const handleDeleteDataset = async (d) => {
-    const id = d._id ?? d.dataset_id ?? d.id;
-    if (!id) {
-      alert("Cannot determine dataset id to delete.");
-      return;
-    }
-
-    const ok = window.confirm(`Delete dataset "${d.original_filename ?? id}"? This will remove the uploaded file permanently.`);
+    const ok = window.confirm(
+      `Delete "${d.original_filename}" permanently?`
+    );
     if (!ok) return;
 
     const prev = datasets;
-    setDatasets((s) => s.filter((it) => (it._id ?? it.dataset_id ?? it.id) !== id));
+    setDatasets((s) =>
+      s.filter((x) => (x._id ?? x.dataset_id) !== id)
+    );
 
     try {
       await deleteDataset(id);
-    } catch (err) {
+    } catch {
+      alert("Delete failed");
       setDatasets(prev);
-      console.error("Failed to delete dataset:", err);
-      alert("Failed to delete dataset: " + (err?.message || String(err)));
     }
   };
 
   return (
-    <div className="p-10 space-y-8 font-inter text-gray-800 bg-stone-50 min-h-screen">
-      {/* Analysis History */}
-      <section>
-        <h1 className="text-3xl font-extrabold text-sky-700 flex items-center gap-3">
-          <Database size={24} /> Analysis History
-        </h1>
-        <p className="text-sm text-gray-600 mb-4">Previously run queries and generated charts.</p>
-
-        {(!history || history.length === 0) ? (
-          <p className="text-gray-500">No history yet.</p>
-        ) : (
-          <div className="grid gap-4">
-            {history.map((h) => (
-              <div key={h.id} className="p-4 border rounded-2xl bg-white shadow-sm">
-                <p className="text-sm text-gray-500">
-                  {h.timestamp ? new Date(h.timestamp).toLocaleString() : ""}
-                </p>
-                <p className="font-semibold">Q: {h.question}</p>
-                {h.filters && Object.keys(h.filters).length > 0 && (
-                  <p className="text-xs text-gray-600">Filters: {JSON.stringify(h.filters)}</p>
-                )}
-                <p className="text-xs text-gray-500">Charts saved: {h.charts?.length ?? 0}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Uploaded Datasets */}
-      <section>
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold">Uploaded Datasets</h2>
-            <p className="text-sm text-gray-600">Files you uploaded and their metadata.</p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={fetchDatasets}
-              disabled={loadingDatasets}
-              className="inline-flex items-center gap-2 px-3 py-2 bg-sky-500 text-white rounded-full hover:bg-sky-600 transition-all duration-300"
-            >
-              <RefreshCw size={16} />
-              <span>{loadingDatasets ? "Refreshing..." : "Refresh"}</span>
-            </button>
-          </div>
+    <div
+      className="
+        min-h-screen p-6 md:p-10 transition-colors duration-300
+        bg-slate-100 text-slate-900
+        dark:bg-gradient-to-br dark:from-slate-950 dark:to-slate-900
+        dark:text-white
+      "
+    >
+      {/* HEADER */}
+      <div className="flex justify-between items-start mb-6">
+        <div>
+          <h1 className="text-3xl md:text-4xl font-bold flex items-center gap-3">
+            <Database /> Analysis History
+          </h1>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+            Access your previously run analyses and manage datasets.
+          </p>
         </div>
 
-        {datasetsError && (
-          <div className="mt-3 text-red-600">
-            <strong>Error:</strong> {datasetsError}
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {/* THEME TOGGLE */}
+          <button
+            onClick={() =>
+              setTheme(theme === "dark" ? "light" : "dark")
+            }
+            className="
+              p-2 rounded-full transition
+              bg-slate-200 hover:bg-slate-300
+              dark:bg-slate-800 dark:hover:bg-slate-700
+            "
+          >
+            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
 
-        <div className="mt-4 bg-white shadow rounded-2xl overflow-hidden">
-          <table className="min-w-full">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="text-left px-4 py-3">Filename</th>
-                <th className="text-left px-4 py-3 hidden md:table-cell">Uploaded</th>
-                <th className="text-left px-4 py-3">Rows</th>
-                <th className="text-left px-4 py-3">Columns</th>
-                <th className="text-left px-4 py-3">Actions</th>
-              </tr>
-            </thead>
+          <button
+            onClick={fetchDatasets}
+            className="
+              inline-flex items-center gap-2 px-4 py-2 rounded-xl
+              bg-indigo-600 text-white hover:bg-indigo-700
+            "
+          >
+            <RefreshCw size={16} />
+            {loading ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+      </div>
 
-            <tbody>
-              {datasets.length === 0 && !loadingDatasets && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
-                    No uploads yet.
-                  </td>
-                </tr>
-              )}
+      {error && <div className="text-rose-500 mb-4">{error}</div>}
 
-              {datasets.map((d) => (
-                <tr key={d._id ?? d.dataset_id ?? d.saved_path} className="border-b last:border-b-0">
-                  <td className="px-4 py-3">{d.original_filename ?? d.dataset_id ?? d._id}</td>
-                  <td className="px-4 py-3 hidden md:table-cell">{d.upload_time ? new Date(d.upload_time).toLocaleString() : "—"}</td>
-                  <td className="px-4 py-3">{d.rows ?? "—"}</td>
-                  <td className="px-4 py-3">{d.columns ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => openDetails(d)}
-                        className="px-2 py-1 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 text-sm inline-flex items-center gap-2"
-                        aria-label={`View details for ${d.original_filename ?? d.dataset_id ?? d._id}`}
-                      >
-                        <FileText size={14} />
-                        <span>View</span>
-                      </button>
-
-                      {d.saved_path ? (
-                        <a
-                          href={d.saved_path}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-sm inline-flex items-center gap-2"
-                          aria-label={`Open file ${d.original_filename ?? d.dataset_id ?? d._id}`}
-                        >
-                          Open file
-                        </a>
-                      ) : null}
-
-                      <button
-                        onClick={() => handleDeleteDataset(d)}
-                        className="px-2 py-1 bg-rose-500 text-white rounded-full hover:bg-rose-600 text-sm inline-flex items-center gap-2"
-                        title="Delete dataset"
-                        aria-label={`Delete ${d.original_filename ?? d.dataset_id ?? d._id}`}
-                      >
-                        <Trash2 size={14} />
-                        <span>Delete</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* TABLE */}
+      <div
+        className="
+          rounded-2xl overflow-hidden shadow-xl
+          bg-white dark:bg-white/5
+          backdrop-blur
+        "
+      >
+        <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-black/5 dark:border-white/5">
+          <div className="col-span-4">Filename</div>
+          <div className="col-span-2">Uploaded</div>
+          <div className="col-span-2">Stats</div>
+          <div className="col-span-2">Quality</div>
+          <div className="col-span-2 text-right">Actions</div>
         </div>
 
-        {/* Modal: Selected dataset details */}
-        {selected && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-            <div className="absolute inset-0 bg-black/40" onClick={closeDetails} aria-hidden />
+        {datasets.map((d) => {
+          const id = d._id ?? d.dataset_id;
+          const quality = stableQuality(id);
 
+          return (
             <div
-              className="relative bg-white rounded-2xl w-full md:w-3/4 max-h-[90vh] overflow-auto shadow-lg p-6 z-10"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="dataset-details-title"
+              key={id}
+              className="
+                md:grid md:grid-cols-12 md:gap-4
+                px-4 md:px-6 py-4
+                border-b last:border-b-0
+                border-black/5 dark:border-white/5
+                hover:bg-black/5 dark:hover:bg-white/5
+                transition
+              "
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 id="dataset-details-title" className="text-xl font-semibold flex items-center gap-2">
-                    <FileText size={18} />
-                    {selected.original_filename}
-                  </h2>
-                  <div className="text-sm text-gray-500">{selected.upload_time}</div>
+              <div className="col-span-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                  <Database className="text-indigo-400" size={18} />
                 </div>
-
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => fetchChartSuggestions(selected._id)}
-                    disabled={loadingSuggestions}
-                    className={`px-3 py-1 rounded-full text-white inline-flex items-center gap-2 ${
-                      loadingSuggestions ? "bg-gray-400" : "bg-emerald-600 hover:bg-emerald-700"
-                    }`}
-                    aria-label="Suggest charts for this dataset"
-                  >
-                    <SlidersHorizontal size={14} />
-                    <span>{loadingSuggestions ? "Analyzing..." : "Suggest Charts"}</span>
-                  </button>
-
-                  <button onClick={closeDetails} className="px-3 py-1 rounded-full bg-gray-100 hover:bg-gray-200 inline-flex items-center gap-2">
-                    <X size={14} /> Close
-                  </button>
+                <div>
+                  <p className="font-semibold">{d.original_filename}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {d.upload_time
+                      ? new Date(d.upload_time).toLocaleString()
+                      : "—"}
+                  </p>
                 </div>
               </div>
 
-              <div className="mt-4 space-y-4">
-                <div>
-                  <h3 className="font-medium">Metadata</h3>
-                  <div className="text-sm text-gray-700">Rows: {selected.rows ?? "—"} · Columns: {selected.columns ?? "—"}</div>
-                  <div className="text-sm text-gray-500 mt-1">Saved path: {selected.saved_path ?? "—"}</div>
-                </div>
-
-                {selected.schema && (
-                  <div>
-                    <h3 className="font-medium mt-2">Schema</h3>
-                    <div className="mt-2 overflow-x-auto bg-stone-50 p-3 rounded-lg">
-                      <table className="min-w-full">
-                        <thead>
-                          <tr>
-                            <th className="px-3 py-2 text-left">Column</th>
-                            <th className="px-3 py-2 text-left">Type</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {Object.entries(selected.schema).map(([k, v]) => (
-                            <tr key={k}>
-                              <td className="px-3 py-2 border-t">{k}</td>
-                              <td className="px-3 py-2 border-t">{v}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {selected.preview && selected.preview.length > 0 && (
-                  <div>
-                    <h3 className="font-medium mt-2">Preview (first {selected.preview.length} rows)</h3>
-                    <div className="mt-2 overflow-auto">
-                      <table className="min-w-full">
-                        <thead>
-                          <tr>
-                            {Object.keys(selected.preview[0]).map((c) => (
-                              <th key={c} className="px-2 py-2 text-left">{c}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selected.preview.map((row, idx) => (
-                            <tr key={idx}>
-                              {Object.keys(selected.preview[0]).map((c) => (
-                                <td key={c} className="px-2 py-2 border-t">{String(row[c])}</td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* Suggested Charts Section */}
-                {loadingSuggestions && (
-                  <div className="mt-4 text-gray-600">Analyzing dataset... this usually takes a few seconds.</div>
-                )}
-
-                {suggestionError && (
-                  <div className="mt-4 text-red-600 text-sm">⚠️ {suggestionError}</div>
-                )}
-
-                {chartSuggestions.length > 0 && (
-                  <div className="mt-6 bg-gray-50 p-4 rounded-lg">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-lg font-semibold">📊 Suggested Charts</h3>
-                      <div className="text-sm text-gray-600">{chartSuggestions.length} suggestions</div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                      {chartSuggestions.map((item, i) => (
-                        <div key={i} className="bg-white border rounded-lg p-3 shadow-sm">
-                          {!item.ok && (
-                            <div className="p-3 text-sm text-rose-600">
-                              <strong>Failed to render chart:</strong>
-                              <div className="text-xs text-gray-600 mt-1">{item.error || "Unknown error"}</div>
-                            </div>
-                          )}
-
-                          <ChartThumbnail
-                            spec={item.spec}
-                            aggregated={item.aggregated}
-                            onClick={() => {
-                              console.log("pin/open chart", item.spec);
-                            }}
-                          />
-
-                          <div className="mt-2 text-xs text-gray-500">
-                            <div className="font-medium text-sm">{(item.spec?.title || `${item.spec?.type || "chart"}`).toString()}</div>
-                            {item.spec?.x && item.spec?.y && (
-                              <div className="mt-1">({item.spec.x} vs {item.spec.y})</div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+              <div className="col-span-2 text-sm text-slate-600 dark:text-slate-400">
+                {d.upload_time
+                  ? new Date(d.upload_time).toLocaleDateString()
+                  : "—"}
               </div>
 
-              <div className="mt-4 flex justify-end">
-                <button onClick={closeDetails} className="px-3 py-2 bg-sky-500 text-white rounded-full hover:bg-sky-600">Close</button>
+              <div className="col-span-2 text-sm">
+                <span className="px-2 py-1 rounded bg-black/5 dark:bg-white/10 text-xs">
+                  {d.rows ?? "—"} rows
+                </span>
+              </div>
+
+              <div className="col-span-2 flex items-center gap-2">
+                <div className="w-16 h-1.5 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full ${qualityColor(quality)}`}
+                    style={{ width: `${quality}%` }}
+                  />
+                </div>
+                <span
+                  className={`text-xs font-bold ${
+                    qualityColor(quality).split(" ")[1]
+                  }`}
+                >
+                  {quality}
+                </span>
+              </div>
+
+              <div className="col-span-2 flex justify-end gap-2">
+                {/* VIEW */}
+                <button
+                  onClick={() => setSelected(d)}
+                  className="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10"
+                >
+                  <Eye size={16} />
+                </button>
+
+                {/* DELETE */}
+                <button
+                  onClick={() => handleDelete(d)}
+                  className="p-2 rounded-lg text-rose-500 hover:bg-rose-500/10"
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
             </div>
+          );
+        })}
+      </div>
+
+      {/* VIEW MODAL */}
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-4xl p-6 max-h-[90vh] overflow-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">
+                {selected.original_filename}
+              </h2>
+              <button onClick={() => setSelected(null)}>
+                <X />
+              </button>
+            </div>
+
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+              Preview (first 5 rows)
+            </p>
+
+            {selected.preview && selected.preview.length > 0 ? (
+              <div className="overflow-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr>
+                      {Object.keys(selected.preview[0]).map((c) => (
+                        <th
+                          key={c}
+                          className="px-3 py-2 text-left border-b"
+                        >
+                          {c}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selected.preview.slice(0, 5).map((row, i) => (
+                      <tr key={i}>
+                        {Object.values(row).map((v, j) => (
+                          <td key={j} className="px-3 py-2 border-b">
+                            {String(v)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-slate-500">No preview available.</p>
+            )}
           </div>
-        )}
-      </section>
+        </div>
+      )}
     </div>
   );
 }

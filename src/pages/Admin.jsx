@@ -1,246 +1,238 @@
-// src/pages/Admin.jsx  (Profile & user stats page)
+// src/pages/Admin.jsx
 import React, { useState, useEffect } from "react";
 
 export default function Admin() {
-  // current profile (last logged-in user)
+  /* ================= STATE ================= */
   const [user, setUser] = useState({ name: "", email: "" });
   const [editing, setEditing] = useState(false);
-
-  // list of all users who have logged in (from localStorage.user_stats)
   const [stats, setStats] = useState([]);
-  const [originalEmailKey, setOriginalEmailKey] = useState(null);
+  const [originalKey, setOriginalKey] = useState(null);
+  const [theme, setTheme] = useState(
+    () => localStorage.getItem("theme") || "dark"
+  );
 
-  // helper to build the key we use in localStorage.user_stats
+  /* ================= HELPERS ================= */
   const makeKey = (u) =>
-    u?.email && u.email !== ""
-      ? u.email
-      : u?.name
-      ? `no-email:${u.name}`
-      : null;
+    u?.email ? u.email : u?.name ? `no-email:${u.name}` : null;
 
+  /* ================= INIT ================= */
   useEffect(() => {
-    // load current user
+    document.documentElement.classList.remove("dark", "light");
+    document.documentElement.classList.add(theme);
+    localStorage.setItem("theme", theme);
+
+    // load user
     let currentUser = { name: "", email: "" };
     try {
-      const rawUser = localStorage.getItem("user");
-      if (rawUser) {
-        const parsed = JSON.parse(rawUser);
-        currentUser = {
-          name: parsed.name || "",
-          email: parsed.email || "",
-        };
-      }
-    } catch {
-      // ignore parse error
-    }
-    setUser(currentUser);
-    setOriginalEmailKey(makeKey(currentUser));
+      const raw = localStorage.getItem("user");
+      if (raw) currentUser = JSON.parse(raw);
+    } catch {}
+
+    setUser({
+      name: currentUser.name || "",
+      email: currentUser.email || "",
+    });
+
+    const key = makeKey(currentUser);
+    setOriginalKey(key);
 
     // load stats
     let obj = {};
     try {
       const rawStats = localStorage.getItem("user_stats");
       if (rawStats) obj = JSON.parse(rawStats) || {};
-    } catch {
-      obj = {};
-    }
+    } catch {}
 
-    const list = Object.entries(obj).map(([key, value]) => ({
-      key,
-      name: value.name || "",
-      email: value.email || "",
-      loginCount: value.loginCount || 0,
-    }));
-    setStats(list);
-  }, []);
+    setStats(
+      Object.entries(obj).map(([k, v]) => ({
+        key: k,
+        name: v.name || "",
+        email: v.email || "",
+        loginCount: v.loginCount || 0,
+      }))
+    );
+  }, [theme]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setUser((prev) => ({ ...prev, [name]: value }));
-  };
+  /* ================= ACTIONS ================= */
+  const toggleTheme = () =>
+    setTheme((t) => (t === "dark" ? "light" : "dark"));
+
+  const handleChange = (e) =>
+    setUser((p) => ({ ...p, [e.target.name]: e.target.value }));
 
   const handleSave = () => {
-    // save current user profile
     localStorage.setItem("user", JSON.stringify(user));
 
-    // also update stats entry for this user
     let obj = {};
     try {
       const raw = localStorage.getItem("user_stats");
       if (raw) obj = JSON.parse(raw) || {};
-    } catch {
-      obj = {};
-    }
+    } catch {}
 
-    const oldKey = originalEmailKey;
     const newKey = makeKey(user);
+    const oldKey = originalKey;
 
-    // find existing entry (keep loginCount)
-    let existing =
-      (oldKey && obj[oldKey]) ||
-      (newKey && obj[newKey]) || {
-        name: user.name || "User",
-        email: user.email || "",
+    const existing =
+      obj[oldKey] ||
+      obj[newKey] || {
+        name: user.name,
+        email: user.email,
         loginCount: 0,
       };
 
-    // delete old key if changed
-    if (oldKey && oldKey !== newKey) {
-      delete obj[oldKey];
-    }
+    if (oldKey && oldKey !== newKey) delete obj[oldKey];
 
-    // write updated entry
-    if (newKey) {
-      obj[newKey] = {
-        ...existing,
-        name: user.name || existing.name,
-        email: user.email || existing.email,
-      };
-    }
+    obj[newKey] = {
+      ...existing,
+      name: user.name,
+      email: user.email,
+    };
 
     localStorage.setItem("user_stats", JSON.stringify(obj));
-    setOriginalEmailKey(newKey);
+    setOriginalKey(newKey);
 
-    // refresh list for UI
-    const list = Object.entries(obj).map(([key, value]) => ({
-      key,
-      name: value.name || "",
-      email: value.email || "",
-      loginCount: value.loginCount || 0,
-    }));
-    setStats(list);
+    setStats(
+      Object.entries(obj).map(([k, v]) => ({
+        key: k,
+        name: v.name || "",
+        email: v.email || "",
+        loginCount: v.loginCount || 0,
+      }))
+    );
 
     setEditing(false);
   };
 
-  const handleClear = () => {
-    // clear current user + ALL stats
-    localStorage.removeItem("user");
-    localStorage.removeItem("user_stats");
-    setUser({ name: "", email: "" });
-    setStats([]);
-    setOriginalEmailKey(null);
-  };
-
+  /* ================= UI ================= */
   return (
-    <div className="min-h-[calc(100vh-3rem)] p-4 sm:p-8">
-      <div className="w-full max-w-4xl bg-white rounded-3xl shadow-xl p-6 sm:p-8">
-        {/* Profile section */}
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-sky-700 mb-1">
-          Profile
-        </h1>
-        <p className="text-sm text-gray-600 mb-6">
-          Manage your account details and see which accounts have used this AI
-          Dashboard.
-        </p>
+    <div className="min-h-screen px-10 py-10 bg-gradient-to-br
+      from-slate-100 to-slate-200
+      dark:from-[#0b1020] dark:to-[#020617]
+      text-slate-900 dark:text-white transition-colors">
 
-        <div className="space-y-4">
-          {/* Name */}
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">Name</label>
-            {editing ? (
-              <input
-                type="text"
-                name="name"
-                value={user.name}
-                onChange={handleChange}
-                className="w-full p-3 rounded-2xl border border-stone-200 focus:ring focus:ring-sky-200"
-                placeholder="Your name"
-              />
-            ) : (
-              <p className="w-full p-3 rounded-2xl bg-stone-50 text-gray-800">
-                {user.name || "Not set"}
-              </p>
-            )}
-          </div>
-
-          {/* Email */}
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">Email</label>
-            {editing ? (
-              <input
-                type="email"
-                name="email"
-                value={user.email}
-                onChange={handleChange}
-                className="w-full p-3 rounded-2xl border border-stone-200 focus:ring focus:ring-sky-200"
-                placeholder="you@company.com"
-              />
-            ) : (
-              <p className="w-full p-3 rounded-2xl bg-stone-50 text-gray-800 break-all">
-                {user.email || "Not set"}
-              </p>
-            )}
-          </div>
+      {/* HEADER */}
+      <div className="flex justify-between items-start mb-12">
+        <div>
+          <h1 className="text-4xl font-bold">Profile Settings</h1>
+          <p className="text-lg text-slate-500 dark:text-slate-400 mt-2">
+            Manage personal details and dashboard access
+          </p>
         </div>
 
-        {/* Buttons */}
-        <div className="flex flex-col sm:flex-row gap-3 mt-6">
-          {!editing ? (
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-sky-500 text-white font-semibold hover:bg-sky-600 transition-all duration-200"
-            >
-              Edit
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSave}
-              className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-sky-500 text-white font-semibold hover:bg-sky-600 transition-all duration-200"
-            >
-              Save
-            </button>
-          )}
+        <button
+          onClick={toggleTheme}
+          className="px-6 py-3 rounded-xl bg-black/10 dark:bg-white/10 hover:scale-105 transition"
+        >
+          {theme === "dark" ? "☀ Light" : "🌙 Dark"}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-10">
+        {/* PROFILE CARD */}
+        <div className="xl:col-span-5 bg-white/70 dark:bg-white/10
+          backdrop-blur border rounded-3xl p-10">
+
+          <div className="flex flex-col items-center">
+            <div className="w-40 h-40 rounded-full bg-gradient-to-br
+              from-indigo-500 to-purple-600 p-1">
+              <div className="w-full h-full rounded-full
+                bg-white dark:bg-black
+                flex items-center justify-center text-5xl font-bold">
+                {user.name ? user.name[0].toUpperCase() : "U"}
+              </div>
+            </div>
+
+            <h2 className="mt-6 text-2xl font-semibold">
+              {user.name || "Your Name"}
+            </h2>
+          </div>
+
+          <div className="mt-10 space-y-6">
+            {["name", "email"].map((field) => (
+              <div key={field}>
+                <label className="text-sm uppercase text-slate-500 dark:text-slate-400">
+                  {field === "name" ? "Display Name" : "Email Address"}
+                </label>
+
+                {editing ? (
+                  <input
+                    name={field}
+                    value={user[field]}
+                    onChange={handleChange}
+                    className="w-full mt-3 px-5 py-4 rounded-xl
+                      bg-transparent border focus:outline-none"
+                  />
+                ) : (
+                  <div className="w-full mt-3 px-5 py-4 rounded-xl
+                    bg-black/5 dark:bg-black/30 border">
+                    {user[field] || "Not set"}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
 
           <button
-            type="button"
-            onClick={handleClear}
-            className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-rose-500 text-white font-semibold hover:bg-rose-600 transition-all duration-200"
+            onClick={() => (editing ? handleSave() : setEditing(true))}
+            className="mt-10 w-full py-4 rounded-xl bg-indigo-600 text-white
+              hover:bg-indigo-700 transition text-xl font-semibold"
           >
-            Clear items
+            {editing ? "Save Profile" : "Edit Profile"}
           </button>
         </div>
 
-        {/* Stats list */}
-        <div className="mt-8">
-          <h2 className="text-lg font-semibold text-gray-800 mb-3">
-            Users who visited this dashboard
-          </h2>
-          {stats.length === 0 ? (
-            <p className="text-sm text-gray-500">
-              No login history yet. Log in with an account to see it here.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-left text-gray-500 border-b border-gray-200">
-                    <th className="py-2 pr-4">Name</th>
-                    <th className="py-2 pr-4">Email</th>
-                    <th className="py-2 pr-4">Login count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stats.map((s) => (
-                    <tr
-                      key={s.key}
-                      className="border-b border-gray-100 last:border-b-0"
-                    >
-                      <td className="py-2 pr-4">{s.name || "Unknown"}</td>
-                      <td className="py-2 pr-4 break-all">
-                        {s.email || "Not set"}
-                      </td>
-                      <td className="py-2 pr-4">{s.loginCount}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* STATS + TABLE */}
+        <div className="xl:col-span-7 space-y-10">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <BigStat label="Account Status" value="Active Pro" />
+            <BigStat label="Last Login" value="2 Hours Ago" />
+            <BigStat label="Team Members" value="1 Active" />
+          </div>
+
+          <div className="bg-white/70 dark:bg-white/10 backdrop-blur
+            border rounded-3xl">
+            <div className="p-8 border-b">
+              <h3 className="text-2xl font-semibold">
+                Users Who Visited This Dashboard
+              </h3>
             </div>
-          )}
+
+            <table className="w-full text-lg">
+              <thead className="text-slate-500 dark:text-slate-400">
+                <tr>
+                  <th className="p-6 text-left">User</th>
+                  <th className="p-6 text-left">Email</th>
+                  <th className="p-6 text-right">Login Count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.map((s) => (
+                  <tr key={s.key} className="border-t">
+                    <td className="p-6">{s.name}</td>
+                    <td className="p-6">{s.email}</td>
+                    <td className="p-6 text-right">
+                      <span className="px-5 py-2 rounded-full
+                        bg-indigo-500/20 text-indigo-600 dark:text-indigo-300">
+                        {s.loginCount} Logins
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function BigStat({ label, value }) {
+  return (
+    <div className="bg-white/70 dark:bg-white/10 backdrop-blur
+      border rounded-2xl p-8">
+      <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="mt-3 text-2xl font-semibold">{value}</p>
     </div>
   );
 }

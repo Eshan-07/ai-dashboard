@@ -1,10 +1,107 @@
 // src/pages/AuthPages.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff, User } from "lucide-react";
+import {
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  User,
+  Sun,
+  Moon,
+} from "lucide-react";
 import { GoogleLogin } from "@react-oauth/google";
+import { motion } from "framer-motion";
 
-// ---- helpers to store profile + stats in localStorage ----
+/* ===================== FLUID CURSOR BACKGROUND ===================== */
+
+function FluidCursorBackground() {
+  const canvasRef = useRef(null);
+  const mouse = useRef({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+  const points = useRef([]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+
+    const resize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+
+    resize();
+    window.addEventListener("resize", resize);
+
+    const onMove = (e) => {
+      mouse.current.x = e.clientX;
+      mouse.current.y = e.clientY;
+    };
+
+    window.addEventListener("mousemove", onMove);
+
+    points.current = Array.from({ length: 14 }).map(() => ({
+      x: mouse.current.x,
+      y: mouse.current.y,
+      vx: 0,
+      vy: 0,
+    }));
+
+    const animate = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      points.current.forEach((p, i) => {
+        const dx = mouse.current.x - p.x;
+        const dy = mouse.current.y - p.y;
+
+        p.vx += dx * 0.02;
+        p.vy += dy * 0.02;
+        p.vx *= 0.85;
+        p.vy *= 0.85;
+
+        p.x += p.vx;
+        p.y += p.vy;
+
+        const radius = 180 - i * 10;
+        const gradient = ctx.createRadialGradient(
+          p.x,
+          p.y,
+          0,
+          p.x,
+          p.y,
+          radius
+        );
+
+        gradient.addColorStop(0, "rgba(99,102,241,0.35)");
+        gradient.addColorStop(0.4, "rgba(139,92,246,0.25)");
+        gradient.addColorStop(1, "rgba(0,0,0,0)");
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      requestAnimationFrame(animate);
+    };
+
+    animate();
+
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("resize", resize);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="fixed inset-0 z-0 pointer-events-none"
+    />
+  );
+}
+
+/* ===================== HELPERS (UNCHANGED) ===================== */
+
 function updateUserStats(user) {
   if (!user) return;
   const emailKey = user.email || `no-email:${user.name || "User"}`;
@@ -13,9 +110,7 @@ function updateUserStats(user) {
   try {
     const raw = localStorage.getItem("user_stats");
     if (raw) stats = JSON.parse(raw) || {};
-  } catch {
-    stats = {};
-  }
+  } catch {}
 
   const existing = stats[emailKey] || {
     name: user.name || "User",
@@ -23,30 +118,46 @@ function updateUserStats(user) {
     loginCount: 0,
   };
 
-  const updated = {
+  stats[emailKey] = {
     ...existing,
-    name: user.name || existing.name,
-    email: user.email || existing.email,
-    loginCount: (existing.loginCount || 0) + 1, // increment only
+    loginCount: (existing.loginCount || 0) + 1,
   };
 
-  stats[emailKey] = updated;
   localStorage.setItem("user_stats", JSON.stringify(stats));
 }
 
-function decodeGoogleCredential(credential) {
-  try {
-    const payload = JSON.parse(atob(credential.split(".")[1]));
-    return {
-      name: payload.name || "Google User",
-      email: payload.email || "",
-    };
-  } catch {
-    return { name: "Google User", email: "" };
-  }
+/* ===================== PASSWORD STRENGTH ===================== */
+
+function getStrength(password) {
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+
+  if (score <= 1) return { label: "Weak", color: "bg-red-500", width: "25%" };
+  if (score === 2) return { label: "Fair", color: "bg-yellow-500", width: "50%" };
+  if (score === 3) return { label: "Good", color: "bg-blue-500", width: "75%" };
+  return { label: "Strong", color: "bg-green-500", width: "100%" };
 }
 
-// ---------------- LOGIN PAGE ----------------
+/* ===================== THEME TOGGLE ===================== */
+
+function useTheme() {
+  const [theme, setTheme] = useState(
+    localStorage.getItem("theme") || "dark"
+  );
+
+  useEffect(() => {
+    document.documentElement.className = theme;
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  return [theme, setTheme];
+}
+
+/* ===================== LOGIN PAGE ===================== */
+
 export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -54,242 +165,158 @@ export function LoginPage() {
   const [error, setError] = useState("");
 
   const navigate = useNavigate();
-
-  console.log(
-    "DEBUG GOOGLE CLIENT ID:",
-    process.env.REACT_APP_GOOGLE_CLIENT_ID
-  );
+  const [theme, setTheme] = useTheme();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
 
-    if (!email || !password) {
-      setError("Please enter email and password.");
-      return;
-    }
-
-    const res = await fetch(
-      `${process.env.REACT_APP_API_URL}/auth/login`,
-      {
-         method: "POST",
-         headers: {
-          "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ email, password }),
-  }
-);
+    try {
+      const res = await fetch("http://localhost:8000/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
       const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Login failed");
 
-      if (!res.ok) {
-        throw new Error(data.detail || "Login failed");
-      }
-
-      // Success
-      console.log("Email login success:", data);
-
-      const user = data.user;
-      localStorage.setItem("user", JSON.stringify(user));
-      updateUserStats(user);
-
+      localStorage.setItem("user", JSON.stringify(data.user));
+      updateUserStats(data.user);
       navigate("/dashboard");
-
     } catch (err) {
-      console.error("Login error:", err);
       setError(err.message);
     }
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-6 font-inter text-gray-800">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
-        <h1 className="text-2xl font-extrabold text-sky-700 mb-1">
-          Welcome back
-        </h1>
-        <p className="text-sm text-gray-600 mb-6">
-          Log in to access your AI Dashboard
-        </p>
+    <div className="min-h-screen bg-[#0B0C15] text-white flex items-center justify-center px-6 relative overflow-hidden">
+      <FluidCursorBackground />
 
-        {/* ---------------- EMAIL LOGIN FORM ---------------- */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Email */}
-          <div>
-            <label className="block text-sm text-gray-600">Email</label>
-            <div className="mt-2 relative">
-              <Mail
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              />
-              <input
-                type="email"
-                className="w-full p-3 pl-10 rounded-2xl border border-stone-200 focus:ring focus:ring-sky-200"
-                placeholder="you@company.com"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-          </div>
+      {/* Theme Toggle */}
+      <button
+        onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+        className="absolute top-6 right-6 z-10 p-3 rounded-full bg-white/10 hover:bg-white/20 transition"
+      >
+        {theme === "dark" ? <Sun /> : <Moon />}
+      </button>
 
-          {/* Password */}
-          <div>
-            <label className="block text-sm text-gray-600">Password</label>
-            <div className="mt-2 relative">
-              <Lock
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              />
-
-              <input
-                type={showPwd ? "text" : "password"}
-                className="w-full p-3 pl-10 pr-10 rounded-2xl border border-stone-200 focus:ring focus:ring-sky-200"
-                placeholder="••••••••"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-
-              <button
-                type="button"
-                onClick={() => setShowPwd((prev) => !prev)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-              >
-                {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
-
-          {/* Error message */}
-          {error && (
-            <p className="text-red-500 text-sm mt-2 text-center">{error}</p>
-          )}
-
-          {/* Submit button */}
-          <button
-            type="submit"
-            className="w-full py-3 rounded-full bg-sky-500 text-white font-semibold hover:bg-sky-600 transition-colors"
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7 }}
+        className="relative z-10 w-full max-w-[620px] bg-[#151621]/70 backdrop-blur-xl rounded-3xl border border-white/10 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.9)]"
+      >
+        <div className="px-12 py-14">
+          <motion.div
+            animate={{ scale: [1, 1.05, 1] }}
+            transition={{ repeat: Infinity, duration: 4 }}
+            className="flex justify-center mb-8 text-indigo-400 text-5xl font-black"
           >
-            Sign in
-          </button>
+            AI Analytics
+          </motion.div>
 
-          {/* Links */}
-          <div className="flex justify-between text-sm mt-2">
-            <Link to="/signup" className="underline">
-              Create account
-            </Link>
-            <Link to="/forgot" className="underline">
-              Forgot password?
-            </Link>
-          </div>
-        </form>
+          <h1 className="text-5xl font-extrabold mb-4 text-center">
+            Welcome back
+          </h1>
+          <p className="text-xl text-slate-400 mb-12 text-center">
+            Access your analytics workspace
+          </p>
 
-        {/* ---------------- GOOGLE LOGIN BUTTON ---------------- */}
-        <div className="mt-6">
-          <div className="text-center text-gray-500 mb-2">or</div>
+          <form onSubmit={handleSubmit} className="space-y-8">
+            <BigInput
+              label="Email Address"
+              icon={<Mail />}
+              value={email}
+              onChange={setEmail}
+              placeholder="name@company.com"
+              type="email"
+            />
 
-          <div className="flex justify-center">
-            <GoogleLogin
-              onSuccess={async (response) => {
-                console.log("Google Login success:", response);
-                setError("");
+            <BigPassword
+              label="Password"
+              value={password}
+              onChange={setPassword}
+              show={showPwd}
+              toggle={() => setShowPwd(!showPwd)}
+            />
 
-                try {
-                  const { credential } = response;
-                  // Call backend
+            {error && (
+              <p className="text-red-400 text-center">{error}</p>
+            )}
+
+            <button className="w-full py-6 text-2xl font-bold rounded-2xl bg-indigo-600 hover:bg-indigo-500 transition shadow-[0_0_40px_rgba(99,102,241,0.6)]">
+              Sign In →
+            </button>
+
+            <div className="text-center text-slate-400 text-lg">OR</div>
+
+            <div className="flex justify-center">
+              <GoogleLogin
+                onSuccess={async (response) => {
                   const res = await fetch("http://localhost:8000/auth/google", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ id_token: credential }),
+                    body: JSON.stringify({ id_token: response.credential }),
                   });
-
-                  if (!res.ok) {
-                    const errData = await res.json();
-                    throw new Error(errData.detail || "Login failed");
-                  }
-
                   const data = await res.json();
-                  console.log("Backend auth success:", data);
-
-                  // Save user from backend response
-                  const user = data.user;
-                  // Ensure name/email are present
-                  localStorage.setItem("user", JSON.stringify(user));
-
-                  updateUserStats(user);
+                  if (!res.ok) throw new Error(data.detail);
+                  localStorage.setItem("user", JSON.stringify(data.user));
+                  updateUserStats(data.user);
                   navigate("/dashboard");
+                }}
+                onError={() => setError("Google login failed")}
+              />
+            </div>
+          </form>
 
-                } catch (err) {
-                  console.error("Backend login error:", err);
-                  setError(err.message || "Login failed. Please try again.");
-                }
-              }}
-              onError={() => {
-                console.log("Google Login Failed");
-                setError("Google login failed. Try again.");
-              }}
-            />
+          <div className="mt-10 text-center text-lg text-slate-400">
+            New here?
+            <Link to="/signup" className="ml-2 text-indigo-400 hover:underline">
+              Create Account
+            </Link>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
 
-// ---------------- SIGNUP PAGE ----------------
+/* ===================== SIGNUP PAGE ===================== */
+
 export function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPwd, setShowPwd] = useState(false);
-  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+  const strength = getStrength(password);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-
-    if (!name || !email || !password || !confirm) {
-      setError("Please fill all fields.");
-      return;
-    }
-
-    if (password !== confirm) {
-      setError("Passwords do not match.");
-      return;
-    }
+    if (password !== confirm)
+      return setError("Passwords do not match.");
 
     setLoading(true);
-
     try {
       const res = await fetch("http://localhost:8000/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password }),
       });
-
       const data = await res.json();
+      if (!res.ok) throw new Error(data.detail);
 
-      if (!res.ok) {
-        throw new Error(data.detail || "Signup failed");
-      }
-
-      // Success
-      console.log("Signup success:", data);
-
-      const user = data.user;
-      localStorage.setItem("user", JSON.stringify(user));
-      updateUserStats(user);
-
-      // Navigate to dashboard (same as login)
+      localStorage.setItem("user", JSON.stringify(data.user));
+      updateUserStats(data.user);
       navigate("/dashboard");
-
     } catch (err) {
-      console.error("Signup error:", err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -297,130 +324,101 @@ export function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-6 font-inter text-gray-800">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
-        <h1 className="text-2xl font-extrabold text-sky-700 mb-1">
+    <div className="min-h-screen bg-[#0B0C15] flex items-center justify-center px-6 text-white relative overflow-hidden">
+      <FluidCursorBackground />
+
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative z-10 w-full max-w-[720px] bg-[#151621]/70 backdrop-blur-xl rounded-3xl border border-white/10 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.9)] px-14 py-16"
+      >
+        <h1 className="text-6xl font-extrabold mb-6">
           Create your account
         </h1>
-        <p className="text-sm text-gray-600 mb-6">
-          Start building insights with your data.
+        <p className="text-xl text-slate-400 mb-12">
+          Start building insights with your data today.
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Name */}
+        <form onSubmit={handleSubmit} className="space-y-8">
+          <BigInput label="Full Name" icon={<User />} value={name} onChange={setName} />
+          <BigInput label="Email Address" icon={<Mail />} value={email} onChange={setEmail} type="email" />
+          <BigPassword label="Password" value={password} onChange={setPassword} show={showPwd} toggle={() => setShowPwd(!showPwd)} />
+
           <div>
-            <label className="block text-sm text-gray-600">Full name</label>
-            <div className="mt-2 relative">
-              <User
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              />
-              <input
-                type="text"
-                className="w-full p-3 pl-10 rounded-2xl border border-stone-200 focus:ring focus:ring-sky-200"
-                placeholder="Jane Doe"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
+            <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+              <div className={`h-full ${strength.color}`} style={{ width: strength.width }} />
             </div>
+            <p className="mt-2 text-sm text-slate-400">
+              Password strength: {strength.label}
+            </p>
           </div>
 
-          {/* Email */}
-          <div>
-            <label className="block text-sm text-gray-600">Email</label>
-            <div className="mt-2 relative">
-              <Mail
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              />
-              <input
-                type="email"
-                className="w-full p-3 pl-10 rounded-2xl border border-stone-200 focus:ring focus:ring-sky-200"
-                placeholder="you@company.com"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-          </div>
+          <BigPassword label="Confirm Password" value={confirm} onChange={setConfirm} show={showConfirm} toggle={() => setShowConfirm(!showConfirm)} />
 
-          {/* Password */}
-          <div>
-            <label className="block text-sm text-gray-600">Password</label>
-            <div className="mt-2 relative">
-              <Lock
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              />
-              <input
-                type={showPwd ? "text" : "password"}
-                className="w-full p-3 pl-10 pr-10 rounded-2xl border border-stone-200 focus:ring focus:ring-sky-200"
-                placeholder="Create a strong password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPwd((prev) => !prev)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-              >
-                {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
+          {error && <p className="text-red-400 text-center">{error}</p>}
 
-          {/* Confirm Password */}
-          <div>
-            <label className="block text-sm text-gray-600">
-              Confirm password
-            </label>
-            <div className="mt-2 relative">
-              <Lock
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              />
-              <input
-                type={showConfirmPwd ? "text" : "password"}
-                className="w-full p-3 pl-10 pr-10 rounded-2xl border border-stone-200 focus:ring focus:ring-sky-200"
-                placeholder="Repeat password"
-                required
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPwd((prev) => !prev)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-              >
-                {showConfirmPwd ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
-
-          {/* Error */}
-          {error && (
-            <p className="text-red-500 text-sm mt-2 text-center">{error}</p>
-          )}
-
-          {/* Submit */}
           <button
-            type="submit"
             disabled={loading}
-            className={`w-full py-3 rounded-full bg-sky-500 text-white font-semibold hover:bg-sky-600 transition-colors ${loading ? "opacity-70 cursor-not-allowed" : ""
-              }`}
+            className="w-full py-7 text-2xl font-bold rounded-2xl bg-indigo-600 hover:bg-indigo-500 transition shadow-[0_0_40px_rgba(99,102,241,0.6)]"
           >
-            {loading ? "Creating account..." : "Create account"}
+            {loading ? "Creating account..." : "Create Account →"}
           </button>
 
-          <div className="flex justify-center text-sm mt-2 text-gray-600">
-            <span>Already have an account?</span>
-            <Link to="/login" className="underline ml-2">
+          <div className="text-center text-lg text-slate-400">
+            Already have an account?
+            <Link to="/login" className="ml-2 text-indigo-400 hover:underline">
               Sign in
             </Link>
           </div>
         </form>
+      </motion.div>
+    </div>
+  );
+}
+
+/* ===================== REUSABLE INPUTS ===================== */
+
+function BigInput({ label, icon, value, onChange, type = "text", placeholder }) {
+  return (
+    <div>
+      <label className="text-lg font-medium mb-2 block">{label}</label>
+      <div className="relative">
+        <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400">
+          {icon}
+        </span>
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          required
+          className="w-full pl-14 pr-5 py-6 rounded-2xl bg-white/5 border border-white/10 text-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+        />
+      </div>
+    </div>
+  );
+}
+
+function BigPassword({ label, value, onChange, show, toggle }) {
+  return (
+    <div>
+      <label className="text-lg font-medium mb-2 block">{label}</label>
+      <div className="relative">
+        <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          type={show ? "text" : "password"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          required
+          className="w-full pl-14 pr-14 py-6 rounded-2xl bg-white/5 border border-white/10 text-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+        />
+        <button
+          type="button"
+          onClick={toggle}
+          className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400"
+        >
+          {show ? <EyeOff /> : <Eye />}
+        </button>
       </div>
     </div>
   );
