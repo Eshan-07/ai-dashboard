@@ -8,6 +8,8 @@ import "./index.css";
 
 // Vite env variable (use import.meta.env)
 const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+console.log("Google Client ID loaded:", clientId);
+
 
 if (!clientId) {
   // eslint-disable-next-line no-console
